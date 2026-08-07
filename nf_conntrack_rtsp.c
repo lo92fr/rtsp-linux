@@ -468,6 +468,9 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 		/* inbound packet: server->client */
 		ret = NF_ACCEPT;
 		break;
+	case IP_CT_DIR_MAX:
+		/* This is not possible with current CTINFO2DIR macro */
+		break;
 	}
 
 	spin_unlock_bh(&rtsp_buffer_lock);
