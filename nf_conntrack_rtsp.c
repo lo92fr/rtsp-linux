@@ -77,9 +77,7 @@ static struct nf_conntrack_expect_policy rtsp_exp_policy;
 
 unsigned int (*nf_nat_rtsp_hook)(struct sk_buff *skb,
 				 enum ip_conntrack_info ctinfo,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 				 unsigned int protoff,
-#endif
 				 unsigned int matchoff, unsigned int matchlen,
 				 struct ip_ct_rtsp_expect* prtspexp,
 				 struct nf_conntrack_expect *rtp_exp,
@@ -268,12 +266,8 @@ rtsp_parse_transport(char* ptran, uint tranlen,
 
 static inline int
 help_out(struct sk_buff *skb, unsigned char *rb_ptr, unsigned int datalen,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 	 struct nf_conn *ct, enum ip_conntrack_info ctinfo,
 	 unsigned int protoff)
-#else
-	 struct nf_conn *ct, enum ip_conntrack_info ctinfo)
-#endif
 {
 	struct ip_ct_rtsp_expect expinfo;
 	
@@ -387,13 +381,8 @@ help_out(struct sk_buff *skb, unsigned char *rb_ptr, unsigned int datalen,
 		nf_nat_rtsp = rcu_dereference(nf_nat_rtsp_hook);
 		if (nf_nat_rtsp && ct->status & IPS_NAT_MASK)
 			/* pass the request off to the nat helper */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 			ret = nf_nat_rtsp(skb, ctinfo, protoff, hdrsoff, hdrslen,
 					  &expinfo, rtp_exp, rtcp_exp);
-#else
-			ret = nf_nat_rtsp(skb, ctinfo, hdrsoff, hdrslen,
-					  &expinfo, rtp_exp, rtcp_exp);
-#endif
 		else {
 			if (rtsp_nf_ct_expect_related(rtp_exp) == 0) {
 				if (rtcp_exp && rtsp_nf_ct_expect_related(rtcp_exp) != 0) {
@@ -472,11 +461,7 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 
 	switch (CTINFO2DIR(ctinfo)) {
 	case IP_CT_DIR_ORIGINAL:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 		ret = help_out(skb, rb_ptr, datalen, ct, ctinfo, protoff);
-#else
-		ret = help_out(skb, rb_ptr, datalen, ct, ctinfo);
-#endif
 		break;
 	case IP_CT_DIR_REPLY:
 		pr_debug("IP_CT_DIR_REPLY\n");
