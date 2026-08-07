@@ -537,11 +537,7 @@ init(void)
 			sprintf(tmpname, "rtsp-%d", i);
 		}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
 		strscpy(hlpr->name, tmpname, sizeof(hlpr->name));
-#else
-		hlpr->name = tmpname;
-#endif
 		pr_debug("port #%d: %d\n", i, ports[i]);
 
 		ret = nf_conntrack_helper_register(hlpr);
