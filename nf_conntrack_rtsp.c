@@ -479,6 +479,7 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 }
 
 static struct nf_conntrack_helper rtsp_helpers[MAX_PORTS];
+static struct nf_conntrack_helper *rtsp_helpers_ptr[MAX_PORTS];
 static char rtsp_names[MAX_PORTS][10];
 
 /* This function is intentionally _NOT_ defined as __exit */
@@ -488,7 +489,7 @@ fini(void)
 	int i;
 	for (i = 0; i < num_ports; i++) {
 		pr_debug("unregistering port %d\n", ports[i]);
-		nf_conntrack_helper_unregister(&rtsp_helpers[i]);
+		nf_conntrack_helper_unregister(rtsp_helpers_ptr[i]);
 	}
 	kfree(rtsp_buffer);
 }
@@ -497,7 +498,6 @@ static int __init
 init(void)
 {
 	int i, ret;
-	struct nf_conntrack_helper *hlpr;
 	char *tmpname;
 
 	printk("nf_conntrack_rtsp v" IP_NF_RTSP_VERSION " loading\n");
@@ -521,15 +521,6 @@ init(void)
 	}
 
 	for (i = 0; (i < MAX_PORTS) && ports[i]; i++) {
-		hlpr = &rtsp_helpers[i];
-		memset(hlpr, 0, sizeof(struct nf_conntrack_helper));
-		hlpr->tuple.src.l3num = AF_INET;
-		hlpr->tuple.src.u.tcp.port = htons(ports[i]);
-		hlpr->tuple.dst.protonum = IPPROTO_TCP;
-		hlpr->expect_policy = &rtsp_exp_policy;
-		hlpr->me = THIS_MODULE;
-		hlpr->help = help;
-
 		tmpname = &rtsp_names[i][0];
 		if (ports[i] == RTSP_PORT) {
 			sprintf(tmpname, "rtsp");
@@ -537,10 +528,14 @@ init(void)
 			sprintf(tmpname, "rtsp-%d", i);
 		}
 
-		strscpy(hlpr->name, tmpname, sizeof(hlpr->name));
+		nf_ct_helper_init(&rtsp_helpers[i], AF_INET, IPPROTO_TCP, tmpname,
+			RTSP_PORT, ports[i], i, &rtsp_exp_policy,
+			0, help, NULL, THIS_MODULE
+		);
+
 		pr_debug("port #%d: %d\n", i, ports[i]);
 
-		ret = nf_conntrack_helper_register(hlpr);
+		ret = nf_conntrack_helper_register(&rtsp_helpers[i], &rtsp_helpers_ptr[i]);
 
 		if (ret) {
 			printk("nf_conntrack_rtsp: ERROR registering port %d\n", ports[i]);
