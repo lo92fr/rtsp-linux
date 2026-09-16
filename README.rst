@@ -1,8 +1,10 @@
-Update:
-=======
+Fork update:
+============
 
-I have not touched this code in years, therefore I am putting this repository in Archive mode
-since there are apparently still some active users.
+I have forked https://github.com/maru-sama/rtsp-linux because I'm still using RTSP from my ISP.
+Many thanks for the original upstream that works great.
+
+Last commit makes it work for kernel >= 7.1.10, but dropped compatibility for earlier versions.
 
 Disclaimer: 
 ===========
