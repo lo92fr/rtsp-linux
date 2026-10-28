@@ -77,9 +77,7 @@ static struct nf_conntrack_expect_policy rtsp_exp_policy;
 
 unsigned int (*nf_nat_rtsp_hook)(struct sk_buff *skb,
 				 enum ip_conntrack_info ctinfo,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 				 unsigned int protoff,
-#endif
 				 unsigned int matchoff, unsigned int matchlen,
 				 struct ip_ct_rtsp_expect* prtspexp,
 				 struct nf_conntrack_expect *rtp_exp,
@@ -268,12 +266,8 @@ rtsp_parse_transport(char* ptran, uint tranlen,
 
 static inline int
 help_out(struct sk_buff *skb, unsigned char *rb_ptr, unsigned int datalen,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 	 struct nf_conn *ct, enum ip_conntrack_info ctinfo,
 	 unsigned int protoff)
-#else
-	 struct nf_conn *ct, enum ip_conntrack_info ctinfo)
-#endif
 {
 	struct ip_ct_rtsp_expect expinfo;
 	
@@ -387,13 +381,8 @@ help_out(struct sk_buff *skb, unsigned char *rb_ptr, unsigned int datalen,
 		nf_nat_rtsp = rcu_dereference(nf_nat_rtsp_hook);
 		if (nf_nat_rtsp && ct->status & IPS_NAT_MASK)
 			/* pass the request off to the nat helper */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 			ret = nf_nat_rtsp(skb, ctinfo, protoff, hdrsoff, hdrslen,
 					  &expinfo, rtp_exp, rtcp_exp);
-#else
-			ret = nf_nat_rtsp(skb, ctinfo, hdrsoff, hdrslen,
-					  &expinfo, rtp_exp, rtcp_exp);
-#endif
 		else {
 			if (rtsp_nf_ct_expect_related(rtp_exp) == 0) {
 				if (rtcp_exp && rtsp_nf_ct_expect_related(rtcp_exp) != 0) {
@@ -471,18 +460,16 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 #endif
 
 	switch (CTINFO2DIR(ctinfo)) {
-	case IP_CT_DIR_MAX:
 	case IP_CT_DIR_ORIGINAL:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 		ret = help_out(skb, rb_ptr, datalen, ct, ctinfo, protoff);
-#else
-		ret = help_out(skb, rb_ptr, datalen, ct, ctinfo);
-#endif
 		break;
 	case IP_CT_DIR_REPLY:
 		pr_debug("IP_CT_DIR_REPLY\n");
 		/* inbound packet: server->client */
 		ret = NF_ACCEPT;
+		break;
+	case IP_CT_DIR_MAX:
+		/* This is not possible with current CTINFO2DIR macro */
 		break;
 	}
 
@@ -492,6 +479,7 @@ static int help(struct sk_buff *skb, unsigned int protoff,
 }
 
 static struct nf_conntrack_helper rtsp_helpers[MAX_PORTS];
+static struct nf_conntrack_helper *rtsp_helpers_ptr[MAX_PORTS];
 static char rtsp_names[MAX_PORTS][10];
 
 /* This function is intentionally _NOT_ defined as __exit */
@@ -501,7 +489,7 @@ fini(void)
 	int i;
 	for (i = 0; i < num_ports; i++) {
 		pr_debug("unregistering port %d\n", ports[i]);
-		nf_conntrack_helper_unregister(&rtsp_helpers[i]);
+		nf_conntrack_helper_unregister(rtsp_helpers_ptr[i]);
 	}
 	kfree(rtsp_buffer);
 }
@@ -510,7 +498,6 @@ static int __init
 init(void)
 {
 	int i, ret;
-	struct nf_conntrack_helper *hlpr;
 	char *tmpname;
 
 	printk("nf_conntrack_rtsp v" IP_NF_RTSP_VERSION " loading\n");
@@ -534,15 +521,6 @@ init(void)
 	}
 
 	for (i = 0; (i < MAX_PORTS) && ports[i]; i++) {
-		hlpr = &rtsp_helpers[i];
-		memset(hlpr, 0, sizeof(struct nf_conntrack_helper));
-		hlpr->tuple.src.l3num = AF_INET;
-		hlpr->tuple.src.u.tcp.port = htons(ports[i]);
-		hlpr->tuple.dst.protonum = IPPROTO_TCP;
-		hlpr->expect_policy = &rtsp_exp_policy;
-		hlpr->me = THIS_MODULE;
-		hlpr->help = help;
-
 		tmpname = &rtsp_names[i][0];
 		if (ports[i] == RTSP_PORT) {
 			sprintf(tmpname, "rtsp");
@@ -550,15 +528,14 @@ init(void)
 			sprintf(tmpname, "rtsp-%d", i);
 		}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,15,0)
-	    strscpy(hlpr->name, tmpname, sizeof(hlpr->name));
-#else
-    	strncpy(hlpr->name, tmpname, sizeof(hlpr->name) - 1);
-	    hlpr->name[sizeof(hlpr->name) - 1] = '\0';
-#endif
+		nf_ct_helper_init(&rtsp_helpers[i], AF_INET, IPPROTO_TCP, tmpname,
+			RTSP_PORT, ports[i], i, &rtsp_exp_policy,
+			0, help, NULL, THIS_MODULE
+		);
+
 		pr_debug("port #%d: %d\n", i, ports[i]);
 
-		ret = nf_conntrack_helper_register(hlpr);
+		ret = nf_conntrack_helper_register(&rtsp_helpers[i], &rtsp_helpers_ptr[i]);
 
 		if (ret) {
 			printk("nf_conntrack_rtsp: ERROR registering port %d\n", ports[i]);
